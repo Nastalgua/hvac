@@ -43,7 +43,8 @@ class Visual:
     def draw_tile(self, position, value, surface):
         value = round(value, 0)
         rect = pygame.Rect((position[0] - (GRID_SIZE / 2), position[1] - (GRID_SIZE / 2)), (GRID_SIZE, GRID_SIZE))
-        pygame.draw.rect(surface, (222, 222 - value, 222 - value), rect)
+
+        pygame.draw.rect(surface, (222, min(max(222 - value, 0), 255), min(max(222 - value, 0), 255)), rect)
         pygame.draw.rect(surface, (93, 216, 228), rect, 1) # border rect
 
         temp = FONT.render(str(value), 1, TEMP_NUM_COLOR)
