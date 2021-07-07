@@ -3,7 +3,7 @@ import numpy as np
 from gym import Env
 from gym.spaces import Discrete, Box
 from numpy import random
-from numpy.lib.scimath import sqrt
+import math 
 
 from ac import AC
 from target import Target
@@ -76,7 +76,7 @@ class HvacEnv(Env):
             if delta < 0.4:
                 reward = 200
             else:
-                capped_delta = min(delta, sqrt(200))
+                capped_delta = min(delta, math.sqrt(200))
                 reward = capped_delta ** 2
         
         # calculate done 
