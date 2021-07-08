@@ -1,4 +1,7 @@
+import sys
 import numpy as np
+
+from env.hvac_env import AC_COUNT
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Flatten
@@ -10,7 +13,7 @@ def build_model(states, actions, file_name, train, lr):
     model.add(Flatten(input_shape=(states, )))
     model.add(Dense(24, activation="relu"))
     model.add(Dense(24, activation="relu"))
-    model.add(Dense(actions, activation='linear'))
+    model.add(Dense(2 * AC_COUNT, activation='linear'))
 
     model.compile(Adam(learning_rate=lr), 'mse')
     
@@ -32,9 +35,9 @@ class QTrainer:
             target = (reward + self.gamma * np.amax(self.model.predict(next_state)[0]))
 
         target_f = self.model.predict(state)
+        actions = np.reshape(actions, (1, AC_COUNT * 2))
 
         for action in range(len(actions[0])):
             target_f[0][action] = target
 
         self.model.fit(state, target_f, verbose=0)
-

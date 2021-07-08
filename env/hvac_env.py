@@ -1,7 +1,7 @@
 import numpy as np
 
 from gym import Env
-from gym.spaces import Discrete, Box
+from gym.spaces import Discrete, MultiDiscrete, Box
 from numpy import random
 import math 
 
@@ -24,13 +24,13 @@ def conv2d(input_matrix: np.ndarray, mask: np.ndarray):
 
 class HvacEnv(Env):
     def __init__(self):
-        # Even numbers = off
-        # odd numbers = on
-        self.action_space = Discrete(AC_COUNT * 2)
+        # 0 = off
+        # 1 = on
+        self.action_space = MultiDiscrete(np.full((AC_COUNT, 2), 2, dtype='int16'))
 
         self.observation_space = Box(
-            low=np.array([0, 0], dtype=np.float32), 
-            high=np.array([100, 100], dtype=np.float32)
+            low=np.array([0, 0], dtype='float32'), 
+            high=np.array([100, 100], dtype='float32')
         )
 
         # start temps
@@ -63,18 +63,17 @@ class HvacEnv(Env):
     def step(self, actions):
         self.apply_length -= 1
 
-        for i in range(len(actions[0])):
-            turnOn = actions[0][i] == 1
-
-            currentAC: AC = self.acs[i]
-            currentAC.on = turnOn
+        # action processing
+        for i in range(len(actions)):
+            self.acs[i].on = (actions[i][1] == 1)
         
         # apply mask
         self.grid = conv2d(self.grid, MASK)
         self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
 
         for ac in self.acs:
-            self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
+            if ac.on:
+                self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
 
         # calculate reward 
         for i in range(len(self.targets)):
@@ -98,6 +97,7 @@ class HvacEnv(Env):
 
         info = {}
 
+        # gui
         if (self.show_gui):
             self.gui.updateData(self.grid)
 
@@ -131,21 +131,22 @@ while True:
     
     print('Episode:{} Score:{}'.format(episode, score))
 '''
+# env = HvacEnv()
+
+# finished = False
+
+# print(env.action_space.nvec)
 '''
-env = HvacEnv()
+# while True:
+#     # testing step()
+#     if (not finished):
+#         new_state, reward, done, info = env.step(0)
+#         finished = done
 
-finished = False
-
-while True:
-    # testing step()
-    if (not finished):
-        new_state, reward, done, info = env.step(0)
-        finished = done
-
-    # testing render() and reset()
-    if (random.randint(0, 100) == 50):
-        env.reset()
-        finished = False
+#     # testing render() and reset()
+#     if (random.randint(0, 100) == 50):
+#         env.reset()
+#         finished = False
     
-    env.render()
+#     env.render()
 '''

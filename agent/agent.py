@@ -1,3 +1,4 @@
+from env.hvac_env import AC_COUNT
 import random
 import sys
 import numpy as np
@@ -28,15 +29,20 @@ class Agent:
         self.memory.append((state, actions, reward, next_state, done))
 
     def get_actions(self, state, train):
+        actions = np.zeros((AC_COUNT, 2), dtype="int16")
+
         if train and np.random.rand() <= self.epsilon:
-            return np.random.randint(0, high=2, size=(1, 3), dtype="int32")
+            fake_precdiction = np.random.random(size=(AC_COUNT, 2))
+            indices = np.argmax(fake_precdiction, axis=1)
+
+            for i in range(len(indices)): actions[i][indices[i]] = 1
+
+            return actions
         else:
             prediction = self.model.predict(state)
-            actions = np.zeros((1, int(prediction.shape[1] / 2)), dtype="int32")
-            
-            for i in range(len(prediction[0])):
-                if i % 2 != 0: continue
-                actions[0][int(i / 2)] = np.argmax([prediction[0][i], prediction[0][i + 1]])
+            indices = np.argmax(np.reshape(prediction, (AC_COUNT, 2)), axis=1)
+
+            for i in range(len(indices)): actions[i][indices[i]] = 1
                 
             return actions
 

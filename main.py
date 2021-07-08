@@ -1,3 +1,4 @@
+import sys
 from env.hvac_env import HvacEnv
 import gym
 
@@ -9,7 +10,7 @@ MAX_TIMESTEP = 1000
 def train(env_name, train=True):
     env = HvacEnv()
     states = env.observation_space.shape[0]
-    p_actions = env.action_space.n
+    p_actions = env.action_space
 
     agent = Agent(p_actions, states, env_name, train)
 
@@ -35,7 +36,7 @@ def train(env_name, train=True):
 
             if done:
                 break
-        
+
         if train:
             agent.train_long_memory()
 
