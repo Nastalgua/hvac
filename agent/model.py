@@ -25,14 +25,16 @@ class QTrainer:
         self.gamma = gamma
         self.model = model
 
-    def train_step(self, state, action, reward, next_state, done):
+    def train_step(self, state, actions, reward, next_state, done):
         target = reward
 
         if not done:
             target = (reward + self.gamma * np.amax(self.model.predict(next_state)[0]))
 
         target_f = self.model.predict(state)
-        target_f[0][action] = target
+
+        for action in range(len(actions[0])):
+            target_f[0][action] = target
 
         self.model.fit(state, target_f, verbose=0)
 

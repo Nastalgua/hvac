@@ -5,12 +5,15 @@ from gym.spaces import Discrete, Box
 from numpy import random
 import math 
 
-from ac import AC
-from target import Target
-from visual import Visual
+from env.ac import AC
+from env.target import Target
+from env.visual import Visual
 
 MASK = np.matrix([1.0 / 9.0]).repeat(9).reshape(3, 3)
+
 AC_COUNT = 3
+AC_FIXED_TEMP = 55
+OUTSIDE_TEMP = 90
 
 def conv2d(input_matrix: np.ndarray, mask: np.ndarray):
     view_shape = mask.shape + tuple(np.subtract(input_matrix.shape, mask.shape) + 1)
@@ -26,13 +29,13 @@ class HvacEnv(Env):
         self.action_space = Discrete(AC_COUNT * 2)
 
         self.observation_space = Box(
-            low=np.array([0, 0, 0], dtype=np.float32), 
-            high=np.array([100, 100, 100], dtype=np.float32)
+            low=np.array([0, 0], dtype=np.float32), 
+            high=np.array([100, 100], dtype=np.float32)
         )
 
         # start temps
         self.grid = np.random.randint(100, size=(8, 8))
-        self.grid = np.pad(self.grid, 1, constant_values=[72])
+        self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
 
         self.acs = np.array([
             AC((7, 3)),
@@ -40,6 +43,9 @@ class HvacEnv(Env):
             AC((7, 7)),
         ], dtype=object)
         
+        for ac in self.acs:
+            self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
+
         self.targets = np.array([
             Target((3, 7)),
             Target((4, 3))
@@ -48,33 +54,27 @@ class HvacEnv(Env):
         self.state = np.array([0, 0])
         
         # time
-        self.apply_length = 60
+        self.apply_length = 2400
 
         # gui init
         self.show_gui = False
-        self.gui = Visual(self.grid)
+        self.gui = Visual(self.grid, self.acs, self.targets)
 
-    def step(self, action):
+    def step(self, actions):
         self.apply_length -= 1
 
-        turnOn = action % 2 != 0
-        ac_index = int(action) / 2
+        for i in range(len(actions[0])):
+            turnOn = actions[0][i] == 1
 
-        currentAC: AC = self.acs[int(ac_index)]
-        currentAC.on = turnOn
+            currentAC: AC = self.acs[i]
+            currentAC.on = turnOn
         
-        for ac in self.acs:
-            # ac temp decrease
-            self.grid[ac.position[0]][ac.position[1]] += ac.factor
-        
-        prev_grid = self.grid
-
+        # apply mask
         self.grid = conv2d(self.grid, MASK)
-        self.grid = np.pad(self.grid, 1, constant_values=[72])
+        self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
 
         for ac in self.acs:
-            # ac temp decrease
-            self.grid[ac.position[0]][ac.position[1]] = prev_grid[ac.position[0]][ac.position[1]]
+            self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
 
         # calculate reward 
         for i in range(len(self.targets)):
@@ -88,7 +88,7 @@ class HvacEnv(Env):
                 reward = 200
             else:
                 capped_delta = min(delta, math.sqrt(200))
-                reward = capped_delta ** 2
+                reward = 200 - (capped_delta ** 2)
         
         # calculate done 
         if self.apply_length <= 0:
@@ -111,10 +111,10 @@ class HvacEnv(Env):
         self.grid = np.random.randint(100, size=(10, 10))
         self.gui.updateData(self.grid)
         self.apply_length = 60
-        return self.grid
 
-env = HvacEnv()
+        return self.state
 
+'''
 episode = 0
 
 while True:
@@ -130,8 +130,10 @@ while True:
         score+=reward
     
     print('Episode:{} Score:{}'.format(episode, score))
-
 '''
+'''
+env = HvacEnv()
+
 finished = False
 
 while True:

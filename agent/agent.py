@@ -1,4 +1,5 @@
 import random
+import sys
 import numpy as np
 from collections import deque
 
@@ -23,15 +24,21 @@ class Agent:
         self.model = build_model(states, actions, file_name, train, lr=LEARNING_RATE)
         self.trainer = QTrainer(model=self.model, lr=LEARNING_RATE, gamma=DISCOUNT_RATE)
 
-    def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
+    def remember(self, state, actions, reward, next_state, done):
+        self.memory.append((state, actions, reward, next_state, done))
 
-    def get_action(self, state, train):
+    def get_actions(self, state, train):
         if train and np.random.rand() <= self.epsilon:
-            return random.randrange(self.actions)
+            return np.random.randint(0, high=2, size=(1, 3), dtype="int32")
         else:
             prediction = self.model.predict(state)
-            return np.argmax(prediction[0])
+            actions = np.zeros((1, int(prediction.shape[1] / 2)), dtype="int32")
+            
+            for i in range(len(prediction[0])):
+                if i % 2 != 0: continue
+                actions[0][int(i / 2)] = np.argmax([prediction[0][i], prediction[0][i + 1]])
+                
+            return actions
 
     def train_long_memory(self):
         if len(self.memory) < BATCH_SIZE:
@@ -39,11 +46,11 @@ class Agent:
 
         mini_sample = random.sample(self.memory, BATCH_SIZE)  # list of tuples
 
-        for state, action, reward, next_state, done in mini_sample:
-            self.trainer.train_step(state, action, reward, next_state, done)
+        for state, actions, reward, next_state, done in mini_sample:
+            self.trainer.train_step(state, actions, reward, next_state, done)
 
         if self.epsilon > EPSILON_MIN:
             self.epsilon *= EPSILON_DECAY
 
-    def train_short_memory(self, state, action, reward, next_state, done):
-        self.trainer.train_step(state, action, reward, next_state, done)
+    def train_short_memory(self, state, actions, reward, next_state, done):
+        self.trainer.train_step(state, actions, reward, next_state, done)
