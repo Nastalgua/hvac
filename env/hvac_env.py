@@ -1,12 +1,13 @@
-import numpy as np
+import os
+import math 
+import numpy as np, random
 
 from gym import Env
-from gym.spaces import Discrete, MultiDiscrete, Box
-from numpy import random
-import math 
+from gym.spaces import MultiDiscrete, Box
 
-from env.ac import AC
-from env.target import Target
+from type_models.ac import AC
+from type_models.wall import Wall
+from type_models.target import Target
 from env.visual import Visual
 
 MASK = np.matrix([1.0 / 9.0]).repeat(9).reshape(3, 3)
@@ -24,41 +25,52 @@ def conv2d(input_matrix: np.ndarray, mask: np.ndarray):
 
 class HvacEnv(Env):
     def __init__(self):
-        # 0 = off
-        # 1 = on
+        # 0 = off, 1 = on
         self.action_space = MultiDiscrete(np.full((AC_COUNT, 2), 2, dtype='int16'))
 
         self.observation_space = Box(
             low=np.array([0, 0], dtype='float32'), 
             high=np.array([100, 100], dtype='float32')
         )
+        
+        self.walls = np.array([], dtype=object)
+        self.targets = np.array([], dtype=object)
+        self.acs = np.array([], dtype=object)
+
+        self.state = np.array([], dtype='int64')
+
+        # process map.txt file
+        cwd = os.getcwd()
+        col = 0; max_length = 0; max_width = 0
+        with open(cwd + "\\env\\map.txt") as f:
+            for i in f.readlines():
+                line = i.replace(" ", "")
+                print(line)
+                for row in range(0, len(line)):
+                    max_width = max(row, max_width)
+
+                    if line[row] == '*': # wall
+                        self.walls = np.append(self.walls, Wall((row + 1, col + 1)))
+                    elif line[row] == 'T':
+                        self.targets = np.append(self.targets, Target((row + 1, col + 1)))
+                        self.state = np.append(self.state, 0)
+                    elif line[row] == 'A':
+                        self.acs = np.append(self.acs, AC((row + 1, col + 1)))
+            
+                col += 1
+                max_length = max(row, max_length)
 
         # start temps
-        self.grid = np.random.randint(100, size=(8, 8))
+        self.grid = np.random.randint(100, size=(max_width, max_length))
         self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
-
-        self.acs = np.array([
-            AC((7, 3)),
-            AC((2, 6)),
-            AC((7, 7)),
-        ], dtype=object)
-        
-        for ac in self.acs:
-            self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
-
-        self.targets = np.array([
-            Target((3, 7)),
-            Target((4, 3))
-        ], dtype=object)
-
-        self.state = np.array([0, 0])
+        for ac in self.acs: self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
         
         # time
         self.apply_length = 2400
 
         # gui init
         self.show_gui = False
-        self.gui = Visual(self.grid, self.acs, self.targets)
+        self.gui = Visual(self.grid, self.walls, self.acs, self.targets)
 
     def step(self, actions):
         self.apply_length -= 1
@@ -97,9 +109,7 @@ class HvacEnv(Env):
 
         info = {}
 
-        # gui
-        if (self.show_gui):
-            self.gui.updateData(self.grid)
+        if (self.show_gui): self.gui.updateData(self.grid) # gui
 
         return self.state, reward, done, info
 
@@ -131,22 +141,11 @@ while True:
     
     print('Episode:{} Score:{}'.format(episode, score))
 '''
-# env = HvacEnv()
-
-# finished = False
-
-# print(env.action_space.nvec)
 '''
-# while True:
-#     # testing step()
-#     if (not finished):
-#         new_state, reward, done, info = env.step(0)
-#         finished = done
+env = HvacEnv()
 
-#     # testing render() and reset()
-#     if (random.randint(0, 100) == 50):
-#         env.reset()
-#         finished = False
-    
-#     env.render()
+finished = False
+
+while True:    
+    env.render()
 '''

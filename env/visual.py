@@ -17,6 +17,7 @@ TILE_COLOR_TWO = (235, 235, 235)
 
 AC_COLOR = (93, 216, 228)
 TARGET_COLOR = (91, 128, 207)
+WALL_COLOR = (66, 66, 66)
 
 TEMP_NUM_COLOR = (0, 0, 0)
 
@@ -28,9 +29,10 @@ def convert_pos(x, y):
     return (x * GRID_SIZE + (GRID_SIZE / 2), y * GRID_SIZE + (GRID_SIZE / 2)) 
 
 class Visual:
-    def __init__(self, data: np.ndarray, acs: np.ndarray, targets: np.ndarray):
+    def __init__(self, data: np.ndarray, walls: np.ndarray, acs: np.ndarray, targets: np.ndarray):
         self.init_render = False
         self.data = data
+        self.walls = walls
         self.acs = acs
         self.targets = targets
     
@@ -63,7 +65,7 @@ class Visual:
             (GRID_SIZE, GRID_SIZE)
         )
 
-        pygame.draw.rect(surface, color, rect, 1) # border rect
+        pygame.draw.rect(surface, color, rect, 5) # border rect
 
     def render(self):
         if not self.init_render:
@@ -89,6 +91,10 @@ class Visual:
             for j in range(len(self.data[i])):
                 self.draw_tile(convert_pos(i, j), self.data[i][j], surface=self.surface)
 
+        for wall in self.walls:
+            wall_pos = wall.position
+            self.draw_special(convert_pos(wall_pos[0], wall_pos[1]), color=WALL_COLOR, surface=self.surface)
+            
         for target in self.targets:
             target_pos = target.position
             self.draw_special(convert_pos(target_pos[0], target_pos[1]), color=TARGET_COLOR, surface=self.surface)
@@ -96,6 +102,7 @@ class Visual:
         for ac in self.acs:
             ac_pos = ac.position
             self.draw_special(convert_pos(ac_pos[0], ac_pos[1]), color=AC_COLOR, surface=self.surface)
+
 
         self.screen.blit(self.surface, (0,0))
 
