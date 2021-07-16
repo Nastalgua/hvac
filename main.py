@@ -12,7 +12,7 @@ def train(env_name, train=True):
     states = env.observation_space.shape[0]
     p_actions = env.action_space
 
-    agent = Agent(p_actions, states, env_name, train)
+    agent = Agent(p_actions, states, env_name, train, ac_count=env.ac_count)
 
     for episode in range(N_EPISODES):
         # uncomment below to view env
