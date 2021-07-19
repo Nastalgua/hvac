@@ -1,5 +1,6 @@
 import os
 import math 
+import sys
 import numpy as np
 
 from gym import Env
@@ -12,20 +13,23 @@ from env.type_models.target import Target
 from env.visual import Visual
 from env.conductivity import OUTSIDE_TEMP, apply_conductivity
 
-APPLY_LENGTH = 60
+APPLY_LENGTH = 540
 
+START_TEMP = 80
 TARGET_TEMP = 74
 AC_FIXED_TEMP = 55
+
+WALL_CONDUCTIVITY = 0.03
+TARGET_CONDUCTIVITY = 1
+AC_CONDUCTIVITY = 1
+DOOR_CONDUCTIVITY = 0.5
+INNER_WALL_CONDUCTIVITY = 0.3
+EMPTY_SPACE_CONDUCTIVITY = 1
 
 MAP_FILE_NAME = "map.txt";
 
 class HvacEnv(Env):
-    def __init__(self):
-        self.observation_space = Box(
-            low=np.array([0, 0], dtype='float32'), 
-            high=np.array([100, 100], dtype='float32')
-        )
-        
+    def __init__(self):    
         self.walls = np.array([], dtype=object)
         self.targets = np.array([], dtype=object)
         self.acs = np.array([], dtype=object)
@@ -55,31 +59,39 @@ class HvacEnv(Env):
                 for row in range(0, len(line)):
                     if line[row] == '*': # wall
                         self.walls = np.append(self.walls, Wall((row + 1, col + 1)))
-                        self.conductivity[row, col] = 0.2
+                        self.conductivity[row, col] = WALL_CONDUCTIVITY
                     elif line[row] == 'T': # target
                         self.targets = np.append(self.targets, Target((row + 1, col + 1)))
                         self.state = np.append(self.state, 0)
-                        self.conductivity[row, col] = 1
+                        self.conductivity[row, col] = TARGET_CONDUCTIVITY
                     elif line[row] == 'A': # AC
                         self.ac_count += 1
                         self.acs = np.append(self.acs, AC((row + 1, col + 1)))
-                        self.conductivity[row, col] = 1
+                        self.conductivity[row, col] = AC_CONDUCTIVITY
                     elif line[row] == 'D': # door
-                        self.conductivity[row, col] = 0.5
-                    elif line[row] == 'I': # door
-                        self.conductivity[row, col] = 0.3
-                    elif line[row] == '_':
-                        self.conductivity[row, col] = 1
+                        self.conductivity[row, col] = DOOR_CONDUCTIVITY
+                    elif line[row] == 'I': # inner wall
+                        self.conductivity[row, col] = INNER_WALL_CONDUCTIVITY
+                    elif line[row] == '_': # empty space
+                        self.conductivity[row, col] = EMPTY_SPACE_CONDUCTIVITY
             
                 col += 1
             f.close()
-
+        
+        self.observation_space = Box(
+            low=np.zeros((1, len(self.targets)), dtype='float32'), 
+            high=np.full((1, len(self.targets)), 100, dtype='float32'),
+            dtype='float32'
+        )
+        
         self.action_space = MultiDiscrete(np.full((self.ac_count, 2), 2, dtype='int16'))
 
         # start temps
-        self.grid = np.random.randint(100, size=(self.max_width, self.max_height))
+        self.grid = np.full((self.max_width, self.max_height), START_TEMP)
         self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
-        for ac in self.acs: self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
+
+        for ac in self.acs: 
+            self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
 
         # time
         self.apply_length = APPLY_LENGTH
@@ -94,7 +106,7 @@ class HvacEnv(Env):
         # process action
         if len(self.acs) > 0:
             for i in range(len(actions)):
-                self.acs[i].on = (actions[i, 1] == 1)
+                self.acs[0].on = (actions[i, 1] == 1)
 
         self.grid = apply_conductivity(self.grid, self.conductivity)
         
@@ -134,10 +146,11 @@ class HvacEnv(Env):
         self.gui.render()
 
     def reset(self):
-        self.grid = np.random.randint(100, size=(self.max_width, self.max_height))
+        self.grid = np.full((self.max_width, self.max_height), START_TEMP)
         self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
         
-        for ac in self.acs: self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
+        for ac in self.acs: 
+            self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
 
         self.gui.updateData(self.grid)
         self.apply_length = APPLY_LENGTH

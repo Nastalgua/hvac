@@ -14,6 +14,7 @@ def conv2d(input_matrix: np.ndarray, mask: np.ndarray):
 
 def apply_conductivity(curr_temps: np.ndarray, thermal_conductivity: np.ndarray):
     delta = conv2d(input_matrix=curr_temps, mask=KERNAL)
-    padded_delta = np.pad(np.multiply(delta, thermal_conductivity), 1, constant_values=[OUTSIDE_TEMP])
-    
-    return curr_temps + padded_delta 
+    new_delta = np.multiply(delta, thermal_conductivity)
+    new_curr_temps = curr_temps[1:-1, 1:-1]
+
+    return np.pad(new_curr_temps + new_delta, 1, constant_values=[OUTSIDE_TEMP])

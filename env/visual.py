@@ -102,7 +102,6 @@ class Visual:
             ac_pos = ac.position
             self.draw_special(convert_pos(ac_pos[0], ac_pos[1]), color=AC_COLOR, surface=self.surface)
 
-
         self.screen.blit(self.surface, (0,0))
 
         pygame.display.update()

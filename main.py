@@ -1,8 +1,8 @@
-import sys
-from env.hvac_env import HvacEnv
 import gym
+import sys
 
 from agent.agent import Agent
+from env.hvac_env import HvacEnv
 
 N_EPISODES = 1000
 MAX_TIMESTEP = 1000
