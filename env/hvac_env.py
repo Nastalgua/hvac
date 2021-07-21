@@ -1,6 +1,6 @@
 import os
-import math 
-import sys
+import math
+import random
 import numpy as np
 
 from gym import Env
@@ -16,7 +16,6 @@ from env.conductivity import OUTSIDE_TEMP, apply_conductivity
 APPLY_LENGTH = 540
 
 START_TEMP = 80
-TARGET_TEMP = 74
 AC_FIXED_TEMP = 55
 
 WALL_CONDUCTIVITY = 0.03
@@ -121,13 +120,13 @@ class HvacEnv(Env):
             current_pos_temp = self.grid[t.position[0]][t.position[1]]
             self.state[i] = current_pos_temp
 
-            delta = abs(current_pos_temp - TARGET_TEMP)
-
+            delta = abs(current_pos_temp - self.target_temp)
+            
             if delta < 0.4:
-                reward = 200
+                reward = 300
             else:
-                capped_delta = min(delta, math.sqrt(200))
-                reward = 200 - (capped_delta ** 2)
+                capped_delta = min(delta, math.sqrt(300))
+                reward = 300 - (capped_delta ** 2)
         
         # calculate done 
         if self.apply_length <= 0:
@@ -156,3 +155,14 @@ class HvacEnv(Env):
         self.apply_length = APPLY_LENGTH
 
         return self.state
+    
+    def target_temps(self):
+        temps = np.ndarray(self.targets.shape, dtype='float32')
+        
+        for i in range(len(self.targets)):
+            temps[i] = self.grid[self.targets[i].position[0], self.targets[i].position[1]]
+
+        return temps
+    
+    def set_target_temp(self):
+        self.target_temp = random.randint(69, 76)
