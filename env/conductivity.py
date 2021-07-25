@@ -3,7 +3,7 @@ import numpy as np
 KERNAL = np.matrix([1.0 / 9.0]).repeat(9).reshape(3, 3)
 KERNAL[1, 1] = (1.0 / 9.0) - 1
 
-OUTSIDE_TEMP = 90
+OUTSIDE_TEMP = 80
 
 def conv2d(input_matrix: np.ndarray, mask: np.ndarray):
     view_shape = mask.shape + tuple(np.subtract(input_matrix.shape, mask.shape) + 1)

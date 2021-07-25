@@ -15,10 +15,13 @@ from env.conductivity import OUTSIDE_TEMP, apply_conductivity
 
 APPLY_LENGTH = 540
 
-START_TEMP = 80
+START_TEMP = 75
 AC_FIXED_TEMP = 55
 
-WALL_CONDUCTIVITY = 0.03
+LOW_TEMP_RANGE = 72
+HIGH_TEMP_RANGE = 76
+
+WALL_CONDUCTIVITY = 0.01
 TARGET_CONDUCTIVITY = 1
 AC_CONDUCTIVITY = 1
 DOOR_CONDUCTIVITY = 0.5
@@ -61,7 +64,6 @@ class HvacEnv(Env):
                         self.conductivity[row, col] = WALL_CONDUCTIVITY
                     elif line[row] == 'T': # target
                         self.targets = np.append(self.targets, Target((row + 1, col + 1)))
-                        self.state = np.append(self.state, 0)
                         self.conductivity[row, col] = TARGET_CONDUCTIVITY
                     elif line[row] == 'A': # AC
                         self.ac_count += 1
@@ -76,21 +78,41 @@ class HvacEnv(Env):
             
                 col += 1
             f.close()
-        
+
+        # create observation space
+        high = np.array([
+            OUTSIDE_TEMP, # max current temperature
+            76, # max target temperature
+            OUTSIDE_TEMP - 76 # max differece
+        ], dtype=np.float32)
+
+        low = np.array([
+            AC_FIXED_TEMP, # min current temperature
+            69, # min target temperature
+            AC_FIXED_TEMP - 69 # min differece
+        ], dtype=np.float32)
+
         self.observation_space = Box(
-            low=np.zeros((1, len(self.targets)), dtype='float32'), 
-            high=np.full((1, len(self.targets)), 100, dtype='float32'),
-            dtype='float32'
+            low=low, 
+            high=high,
+            dtype=np.float32
         )
         
-        self.action_space = MultiDiscrete(np.full((self.ac_count, 2), 2, dtype='int16'))
+        self.action_space = MultiDiscrete(np.full((self.ac_count, 2), 1, dtype='int16'))
 
         # start temps
+        self.set_target_temp()
+
         self.grid = np.full((self.max_width, self.max_height), START_TEMP)
         self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
 
         for ac in self.acs: 
             self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
+
+        for i in range(len(self.targets)):
+            t: Target = self.targets[i]
+            current_temp = self.grid[t.position[0]][t.position[1]]
+            self.state = np.append(self.state, [current_temp, self.target_temp, current_temp - self.target_temp])
 
         # time
         self.apply_length = APPLY_LENGTH
@@ -105,64 +127,70 @@ class HvacEnv(Env):
         # process action
         if len(self.acs) > 0:
             for i in range(len(actions)):
-                self.acs[0].on = (actions[i, 1] == 1)
+                # "Dumb" controller
+                # t: Target = self.targets[0]
 
+                # current_pos_temp = self.grid[t.position[0]][t.position[1]]
+
+                # if current_pos_temp > self.target_temp:
+                #     self.acs[i].on = True
+                # else:
+                #     self.acs[i].on = False
+                
+                # "smart" controller
+                self.acs[i].on = (actions[i, 1] == 1)
+        
         self.grid = apply_conductivity(self.grid, self.conductivity)
         
-        # maintain AC temp
         for ac in self.acs:
             if ac.on:
                 self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
-
+                
         # calculate reward 
+        total_reward = 0
+        done = False
         for i in range(len(self.targets)):
             t: Target = self.targets[i]
-            current_pos_temp = self.grid[t.position[0]][t.position[1]]
-            self.state[i] = current_pos_temp
 
-            delta = abs(current_pos_temp - self.target_temp)
+            current_pos_temp = self.grid[t.position[0]][t.position[1]]
+            self.state[i] = current_pos_temp - self.target_temp
             
+            delta = abs(current_pos_temp - self.target_temp)
+
             if delta < 0.4:
-                reward = 300
+                total_reward = 200
+                done = True
             else:
-                capped_delta = min(delta, math.sqrt(300))
-                reward = 300 - (capped_delta ** 2)
+                capped_delta = min(delta, math.sqrt(200))
+                total_reward = 201 - (capped_delta ** 2)
         
         # calculate done 
         if self.apply_length <= 0:
             done = True
-        else:
-            done = False
 
         info = {}
 
         if (self.show_gui): self.gui.updateData(self.grid) # gui
 
-        return self.state, reward, done, info
+        return self.state, total_reward, done, info
 
     def render(self):
         self.show_gui = True
         self.gui.render()
 
     def reset(self):
-        self.grid = np.full((self.max_width, self.max_height), START_TEMP)
-        self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
-        
-        for ac in self.acs: 
-            self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
-
-        self.gui.updateData(self.grid)
         self.apply_length = APPLY_LENGTH
 
         return self.state
     
     def target_temps(self):
         temps = np.ndarray(self.targets.shape, dtype='float32')
-        
+
         for i in range(len(self.targets)):
-            temps[i] = self.grid[self.targets[i].position[0], self.targets[i].position[1]]
+            t: Target = self.targets[i]
+            temps[i] = self.grid[t.position[0], t.position[1]]
 
         return temps
     
     def set_target_temp(self):
-        self.target_temp = random.randint(69, 76)
+        self.target_temp = random.randint(LOW_TEMP_RANGE, HIGH_TEMP_RANGE)
