@@ -10,13 +10,14 @@ from agent.agent import Agent
 
 from env.hvac_env import HvacEnv
 
-N_EPISODES = 10
+N_EPISODES = 200
 MAX_TIMESTEP = 1000
 
 episode_endpoints = np.array([], dtype='float32')
 rewards = np.array([], dtype='float32')
 times = np.array([], dtype='int32')
 target_temps = np.array([], dtype='float32')
+goal_temps = np.array([], dtype='float32')
 
 def train(env_name, train=True):
     env = HvacEnv()
@@ -25,9 +26,10 @@ def train(env_name, train=True):
     target_temps = np.zeros((1, len(env.targets)), dtype='float32')
     
     states = env.observation_space.shape[0]
-    p_actions = env.action_space
 
-    agent = Agent(p_actions, states, env_name, train, ac_count=env.ac_count)
+    possible_actions = env.action_space
+
+    agent = Agent(possible_actions, states, env_name, train, ac_count=env.ac_count)
 
     index = 0
         
@@ -51,22 +53,25 @@ def train(env_name, train=True):
             actions = agent.get_actions(old_state, train=train)
 
             new_state, reward, done, info = env.step(actions)
-            agent.train_short_memory(old_state, actions, reward, new_state, done)
 
             is_done = done
             
             if train:
+                # agent.train_short_memory(old_state, actions, reward, new_state, done)
                 agent.remember(old_state, actions, reward, new_state, done)
 
             target_temps = np.vstack((target_temps, env.target_temps()))
+            
+            global goal_temps
+            goal_temps = np.append(goal_temps, env.target_temp)
 
             global rewards
             rewards = np.append(rewards, [reward])
             total_reward += reward
 
-            if reward < 0:
-                print(reward)
-                sys.exit()
+            # if reward < 0:
+            #     print('Reward less than 0...')
+            #     sys.exit()
 
             old_state = new_state
 
@@ -75,8 +80,7 @@ def train(env_name, train=True):
 
         if train:
             agent.train_long_memory()
-        
-        env.set_target_temp()
+            agent.decrease_epsilon()
 
         print("episode: {}/{} | score: {} | e: {:.3f}".format(episode +
               1, N_EPISODES, total_reward, agent.epsilon))
@@ -96,7 +100,7 @@ def to_csv():
     f.close()
 
 if __name__ == "__main__":
-    train('hvac', train=True)
+    train('hvac', train=False)
     
     # graph
     plt.plot(times, rewards, 'r', label='Reward')
@@ -111,6 +115,8 @@ if __name__ == "__main__":
 
         plt.plot(times, sub_target_temps, c=color, label='Themostat: {}'.format(i))
     
+    plt.plot(times, goal_temps, c='b', label='Temperature Setpoint')
+
     plt.title('Reward & Thermostat')
     
     for endpoint in episode_endpoints:

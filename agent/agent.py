@@ -7,12 +7,12 @@ from agent.model import QTrainer, build_model
 
 # memory
 BATCH_SIZE = 32
-MAX_MEM = 2000
+MAX_MEM = 100
 
 # hyperparameters
 LEARNING_RATE = 0.001
-DISCOUNT_RATE = 0.95
-EPSILON_DECAY = 0.995
+DISCOUNT_RATE = 0.99
+EPSILON_DECAY = 0.99
 EPSILON_MIN = 0.01
 
 class Agent:
@@ -38,26 +38,46 @@ class Agent:
 
             for i in range(len(indices)): actions[i][indices[i]] = 1
 
+            # print('Random Actions: {}'.format(actions))
+
             return actions
         else:
-            prediction = self.model.predict(state.reshape(1, 3))
+            prediction = self.model.predict(np.reshape(state, (1, 1)))
+            # print('Predictions: {}'.format(prediction))
             indices = np.argmax(np.reshape(prediction, (self.ac_count, 2)), axis=1)
-
+            
             for i in range(len(indices)): actions[i][indices[i]] = 1
 
-            return actions
+            # print('Predicted Actions: {}'.format(actions))
 
-    def set_finished(self, finished):
-        self.finished = finished
+            return actions
 
     def train_long_memory(self):
         mini_sample = random.sample(self.memory, min(len(self.memory), BATCH_SIZE))  # list of tuples
+        
+        # x_batch = []
+        # y_batch = []
 
         for state, actions, reward, next_state, done in mini_sample:
             self.trainer.train_step(state, actions, reward, next_state, done, ac_count=self.ac_count)
+            # resized_state = state.reshape(1, 3)
+            # resized_next_state = next_state.reshape(1, 3)
 
-        if self.epsilon > EPSILON_MIN:
-            self.epsilon *= EPSILON_DECAY
+            # target_f = self.model.predict(resized_state)
+
+            # for action in range(len(actions[0])):
+            #     if actions[0][action] == 1:
+            #         target_f[0][action] = reward if done else reward + DISCOUNT_RATE * np.max(self.model.predict(resized_next_state)[0])
+            
+            # x_batch.append(resized_state[0])
+            # y_batch.append(target_f[0])
+
+        # if (len(x_batch) > 0 and len(y_batch) > 0):
+            # self.model.fit(np.array(x_batch), np.array(y_batch), epochs=100, batch_size=len(x_batch), verbose=0)
 
     def train_short_memory(self, state, actions, reward, next_state, done):
         self.trainer.train_step(state, actions, reward, next_state, done, ac_count=self.ac_count)
+
+    def decrease_epsilon(self):
+        if self.epsilon > EPSILON_MIN:
+            self.epsilon *= EPSILON_DECAY
