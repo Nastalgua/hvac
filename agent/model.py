@@ -2,11 +2,11 @@ import sys
 import numpy as np
 
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Flatten, InputLayer
+from tensorflow.keras.layers import Dense
 
 from tensorflow.keras.optimizers import Adam
 
-def build_model(states, actions, file_name, train, lr, ac_count):
+def build_model(states, actions, file_name, train, lr):
     model = Sequential()
     
     model.add(Dense(24, activation="relu", input_shape=(states, )))
@@ -26,22 +26,16 @@ class QTrainer:
         self.gamma = gamma
         self.model = model
 
-    def train_step(self, state, actions, reward, next_state, done, ac_count):
-        # print(state)
-        # sys.exit()
-        state_reshaped = np.reshape(state, (1, 1))
-        next_state_reshaped = np.reshape(next_state, (1, 1))
-
+    def train_step(self, state, actions, reward, next_state, done):
         target = reward
         
         if not done:
-            target = reward + self.gamma * np.max(self.model.predict(next_state_reshaped)[0])
+            target = reward + self.gamma * np.max(self.model.predict(next_state)[0])
         
-        target_f = self.model.predict(state_reshaped)
-        actions_reshaped = np.reshape(actions, (1, ac_count * 2))
+        target_f = self.model.predict(state)
 
-        for action in range(len(actions_reshaped[0])):
-            if actions_reshaped[0][action] == 1:
+        for action in range(len(actions[0])):
+            if actions[0][action] == 1:
                 target_f[0][action] = target
         
-        self.model.fit(state_reshaped, target_f, verbose=0)
+        self.model.fit(state, target_f, verbose=0)

@@ -1,9 +1,8 @@
-import sys
+import csv
 import random
 
 import numpy as np
 
-import csv
 from matplotlib import pyplot as plt
 
 from agent.agent import Agent
@@ -17,19 +16,18 @@ episode_endpoints = np.array([], dtype='float32')
 rewards = np.array([], dtype='float32')
 times = np.array([], dtype='int32')
 target_temps = np.array([], dtype='float32')
-goal_temps = np.array([], dtype='float32')
 
 def train(env_name, train=True):
     env = HvacEnv()
 
-    global target_temps
-    target_temps = np.zeros((1, len(env.targets)), dtype='float32')
+    global thermostat_temps
+    thermostat_temps = np.empty((1, len(env.thermostats)), dtype='float32')
     
-    states = env.observation_space.shape[0]
+    states = len(env.thermostats)
 
     possible_actions = env.action_space
 
-    agent = Agent(possible_actions, states, env_name, train, ac_count=env.ac_count)
+    agent = Agent(possible_actions, states, env_name, train)
 
     index = 0
         
@@ -47,31 +45,37 @@ def train(env_name, train=True):
 
             index += 1
 
+            # log steps
             global times
             times = np.append(times, [index])
 
             actions = agent.get_actions(old_state, train=train)
 
-            new_state, reward, done, info = env.step(actions)
+            new_state, reward, done, _ = env.step(actions)
 
             is_done = done
             
             if train:
-                # agent.train_short_memory(old_state, actions, reward, new_state, done)
                 agent.remember(old_state, actions, reward, new_state, done)
+                # agent.train_short_memory(old_state, actions, reward, new_state, done)
 
-            target_temps = np.vstack((target_temps, env.target_temps()))
+            # log thermostat temps
+            env_thermostat_temps = env.get_thermostat_temps()
+            thermostat_temps = np.append(
+                thermostat_temps, 
+                np.reshape(env_thermostat_temps, (1, len(env_thermostat_temps))), 
+                axis=0
+            )
             
-            global goal_temps
-            goal_temps = np.append(goal_temps, env.target_temp)
+            # log target temps
+            global target_temps
+            target_temps = np.append(target_temps, env.target_temp)
 
+            # log rewards
             global rewards
             rewards = np.append(rewards, [reward])
-            total_reward += reward
 
-            # if reward < 0:
-            #     print('Reward less than 0...')
-            #     sys.exit()
+            total_reward += reward
 
             old_state = new_state
 
@@ -93,29 +97,32 @@ def to_csv():
     writer = csv.writer(f)
 
     writer.writerow(rewards)
-    writer.writerow(target_temps)
     writer.writerow(times)
     writer.writerow(episode_endpoints)
 
+    for i in range(len(thermostat_temps[0])):
+        sub_thermostat_temps = thermostat_temps[:, i][1:]
+        writer.writerow(sub_thermostat_temps)
+    
     f.close()
 
 if __name__ == "__main__":
-    train('hvac', train=False)
+    train('hvac', train=True)
     
     # graph
     plt.plot(times, rewards, 'r', label='Reward')
     
-    for i in range(len(target_temps[0])):
-        sub_target_temps = target_temps[:, i][1:]
+    for i in range(len(thermostat_temps[0])):
+        sub_thermostat_temps = thermostat_temps[:, i][1:]
 
         r = random.random()
         b = random.random()
         g = random.random()
         color = (r, g, b)
 
-        plt.plot(times, sub_target_temps, c=color, label='Themostat: {}'.format(i))
+        plt.plot(times, sub_thermostat_temps, c=color, label='Themostat: {}'.format(i))
     
-    plt.plot(times, goal_temps, c='b', label='Temperature Setpoint')
+    plt.plot(times, target_temps, c='b', label='Temperature Setpoint')
 
     plt.title('Reward & Thermostat')
     

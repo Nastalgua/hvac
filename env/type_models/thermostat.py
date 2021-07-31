@@ -1,5 +1,5 @@
 from typing import Tuple
 
-class Target:
+class Thermostat:
     def __init__(self, position: Tuple[int, int]):
         self.position = position

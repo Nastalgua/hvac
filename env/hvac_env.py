@@ -8,7 +8,7 @@ from gym.spaces import Discrete, Box, Tuple
 
 from env.type_models.ac import AC
 from env.type_models.wall import Wall
-from env.type_models.target import Target
+from env.type_models.thermostat import Thermostat
 
 from env.visual import Visual
 from env.conductivity import OUTSIDE_TEMP, apply_conductivity
@@ -22,7 +22,7 @@ LOW_TEMP_RANGE = 73
 HIGH_TEMP_RANGE = 77
 
 WALL_CONDUCTIVITY = 0.01
-TARGET_CONDUCTIVITY = 1
+THERMOSTAT_CONDUCTIVITY = 1
 AC_CONDUCTIVITY = 1
 DOOR_CONDUCTIVITY = 0.5
 INNER_WALL_CONDUCTIVITY = 0.3
@@ -30,56 +30,19 @@ EMPTY_SPACE_CONDUCTIVITY = 1
 
 MAP_FILE_NAME = "map.txt";
 
+PASS_COLOR = '\033[94m'
+FAIL_COLOR = '\033[91m'
+SOLVE_SUCCESS_COLOR = '\033[92m'
+RESET_COLOR = '\033[0m'
+
 class HvacEnv(Env):
     def __init__(self):    
         self.walls = np.array([], dtype=object)
-        self.targets = np.array([], dtype=object)
+        self.thermostats = np.array([], dtype=object)
         self.acs = np.array([], dtype=object)
-        
-        self.state = np.array([], dtype='float32')
 
-        self.ac_count = 0
+        self.process_map()
 
-        # process map
-        cwd = os.getcwd()
-        with open(cwd + "\\env\\maps\\" + MAP_FILE_NAME) as f: # get length and height
-            j = 0        
-            for line in f.readlines():
-                self.max_width = math.ceil(len(line) / 2.0)
-                j += 1
-            
-            self.max_height = j
-            f.close()
-        
-        self.conductivity = np.zeros((self.max_width, self.max_height))
-
-        col = 0;
-        with open(cwd + "\\env\\maps\\" + MAP_FILE_NAME) as f:
-            for i in f.readlines():
-                line = i.replace(" ", "")
-
-                for row in range(0, len(line)):
-                    if line[row] == '*': # wall
-                        self.walls = np.append(self.walls, Wall((row + 1, col + 1)))
-                        self.conductivity[row, col] = WALL_CONDUCTIVITY
-                    elif line[row] == 'T': # target
-                        self.targets = np.append(self.targets, Target((row + 1, col + 1)))
-                        self.conductivity[row, col] = TARGET_CONDUCTIVITY
-                    elif line[row] == 'A': # AC
-                        self.ac_count += 1
-                        self.acs = np.append(self.acs, AC((row + 1, col + 1)))
-                        self.conductivity[row, col] = AC_CONDUCTIVITY
-                    elif line[row] == 'D': # door
-                        self.conductivity[row, col] = DOOR_CONDUCTIVITY
-                    elif line[row] == 'I': # inner wall
-                        self.conductivity[row, col] = INNER_WALL_CONDUCTIVITY
-                    elif line[row] == '_': # empty space
-                        self.conductivity[row, col] = EMPTY_SPACE_CONDUCTIVITY
-            
-                col += 1
-            f.close()
-
-        # create observation space
         high = np.array([
             OUTSIDE_TEMP - 76 # max differece
         ], dtype=np.float32)
@@ -104,63 +67,65 @@ class HvacEnv(Env):
         self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
 
         # set state
-        for i in range(len(self.targets)):
-            t: Target = self.targets[i]
-            current_temp = self.grid[t.position[0]][t.position[1]]
-            self.state = np.append(self.state, [current_temp - self.target_temp])
-        # current_temp, self.target_temp, 
-        
-        self.old_delta = -1
+        self.state = np.array([], dtype=np.float32)
 
-        # time
+        for i in range(len(self.thermostats)):
+            t: Thermostat = self.thermostats[i]
+            current_temp = self.grid[t.position[0]][t.position[1]]
+
+            self.state = np.append(self.state, [current_temp - self.target_temp])
+        
+        # keep track of old changes
+        self.old_deltas = np.full((1, len(self.thermostats)), -1, dtype=np.float32)
+        print(self.old_deltas)
+
+        # time (prevent AI from creating a infinite loop)
         self.apply_length = APPLY_LENGTH
 
         # gui init
         self.show_gui = False
-        self.gui = Visual(self.grid, self.walls, self.acs, self.targets)
+        self.gui = Visual(self.grid, self.walls, self.acs, self.thermostats)
 
     def step(self, actions):
-        if self.grid[self.targets[0].position[0]][self.targets[0].position[1]] < self.target_temp:
+        # determine if AI is on right course
+        if self.grid[self.thermostats[0].position[0]][self.thermostats[0].position[1]] < self.target_temp:
             if actions[0, 0] == 1:
-                print('\033[94m' + 'Passed!' + '\033[0m')
+                print(PASS_COLOR + 'Passed!' + RESET_COLOR)
             else:
-                print('\033[91m' + 'Failed.' + '\033[0m')
+                print(FAIL_COLOR + 'Failed.' + RESET_COLOR)
         else:
             if actions[0, 1] == 1:
-                print('\033[94m' + 'Passed!' + '\033[0m')
+                print(PASS_COLOR + 'Passed!' + RESET_COLOR)
             else:
-                print('\033[91m' + 'Failed.' + '\033[0m')
+                print(FAIL_COLOR + 'Failed.' + RESET_COLOR)
 
         self.apply_length -= 1
 
         # process action
         if len(self.acs) > 0:
-            for i in range(len(actions)):
-                '''
-                # "Dumb" controller
-                t: Target = self.targets[0]
+            for i in range(len(actions)): # len(actions) == len(acs)
+                current_ac: AC = self.acs[i]
 
-                current_pos_temp = self.grid[t.position[0]][t.position[1]]
+                current_ac.on = (actions[i, 1] == 1)
+                
+                if current_ac.on:
+                    self.grid[current_ac.position[0]][current_ac.position[1]] = AC_FIXED_TEMP
 
-                if current_pos_temp > self.target_temp:
-                    self.acs[i].on = True
-                else:
-                    self.acs[i].on = False
-                '''
-                # "smart" controller
-                self.acs[i].on = (actions[i, 1] == 1)
-        
+        # apply the temperature conductivity
         self.grid = apply_conductivity(self.grid, self.conductivity)
         
+        # maintain AC temperature after applying conductivity
         for ac in self.acs:
             if ac.on:
                 self.grid[ac.position[0]][ac.position[1]] = AC_FIXED_TEMP
         
-        self.state = np.array([], dtype='float32')
+        # update state
+        self.state = np.array([], dtype=np.float32)
 
-        for i in range(len(self.targets)):
-            t: Target = self.targets[i]
+        for i in range(len(self.thermostats)):
+            t: Thermostat = self.thermostats[i]
             current_temp = self.grid[t.position[0]][t.position[1]]
+
             self.state = np.append(self.state, [current_temp - self.target_temp])
 
         # calculate done 
@@ -169,72 +134,64 @@ class HvacEnv(Env):
             done = True
 
         # calculate reward 
-        total_reward = 0
-        for i in range(len(self.targets)):
-            t: Target = self.targets[i]
+        reward = 0
+        for i in range(len(self.thermostats)): # len(self.thermostats) == len(self.deltas)
+            t: Thermostat = self.thermostats[i]
             current_pos_temp = self.grid[t.position[0]][t.position[1]]
             
             delta = abs(current_pos_temp - self.target_temp)
 
             if delta < 0.5:
-                print('success')
-                total_reward += 50
+                print(SOLVE_SUCCESS_COLOR + 'Success!' + RESET_COLOR)
+                reward += 50
                 done = True
-            # else:
-            #     capped_delta = min(delta, math.sqrt(9))
-            #     total_reward = 9 - (capped_delta ** 2)
-            #     total_reward = 0
-                # total_reward = 201 - min(delta * 15, 201)
             
-            if self.old_delta != -1:
-                if self.old_delta > delta:
-                    total_reward -= 2
+            if self.old_deltas[0][i] != -1:
+                if self.old_deltas[0][i] > delta: # moving away from the target number
+                    reward -= 2
                 else:
-                    total_reward += 2
+                    reward += 2
 
-            self.old_delta = delta
-
-        total_reward -= APPLY_LENGTH - self.apply_length
+            self.old_deltas[0][i] = delta
+        
+        # discourage AI from taking too long
+        reward -= (APPLY_LENGTH - self.apply_length)
 
         info = {}
 
         if (self.show_gui): self.gui.updateData(self.grid) # gui
 
-        return self.state, total_reward, done, info
+        return self.state, reward, done, info
 
     def render(self):
         self.show_gui = True
         self.gui.render()
 
     def reset(self):
-        # set target temperature
         self.set_target_temp()
-        # print(self.target_temp)
         
-        # reset grid
         self.grid = np.full((self.max_width, self.max_height), START_TEMP)
         self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
 
-        # reset length
         self.apply_length = APPLY_LENGTH
 
-        self.state = np.array([], dtype='float32')
+        self.state = np.array([], dtype=np.float32)
 
-        self.old_delta = -1
+        self.old_deltas = np.full((1, len(self.thermostats)), -1, dtype=np.float32)
         
-        # set state
-        for i in range(len(self.targets)):
-            t: Target = self.targets[i]
+        for i in range(len(self.thermostats)):
+            t: Thermostat = self.thermostats[i]
             current_temp = self.grid[t.position[0]][t.position[1]]
+
             self.state = np.append(self.state, [current_temp - self.target_temp])
 
         return self.state
     
-    def target_temps(self):
-        temps = np.ndarray(self.targets.shape, dtype='float32')
+    def get_thermostat_temps(self):
+        temps = np.ndarray(self.thermostats.shape, dtype=np.float32)
 
-        for i in range(len(self.targets)):
-            t: Target = self.targets[i]
+        for i in range(len(self.thermostats)):
+            t: Thermostat = self.thermostats[i]
             temps[i] = self.grid[t.position[0], t.position[1]]
 
         return temps
@@ -244,3 +201,44 @@ class HvacEnv(Env):
 
         while self.target_temp == START_TEMP:
             self.target_temp = random.randint(LOW_TEMP_RANGE, HIGH_TEMP_RANGE)
+    
+    def process_map(self):
+        self.ac_count = 0
+
+        cwd = os.getcwd()
+        with open(cwd + "\\env\\maps\\" + MAP_FILE_NAME) as f: # get length and height
+            j = 0        
+            for line in f.readlines():
+                self.max_width = math.ceil(len(line) / 2.0)
+                j += 1
+            
+            self.max_height = j
+            f.close()
+        
+        self.conductivity = np.zeros((self.max_width, self.max_height))
+
+        col = 0;
+        with open(cwd + "\\env\\maps\\" + MAP_FILE_NAME) as f:
+            for i in f.readlines():
+                line = i.replace(" ", "")
+
+                for row in range(0, len(line)):
+                    if line[row] == '*': # wall
+                        self.walls = np.append(self.walls, Wall((row + 1, col + 1)))
+                        self.conductivity[row, col] = WALL_CONDUCTIVITY
+                    elif line[row] == 'T': # thermostat
+                        self.thermostats = np.append(self.thermostats, Thermostat((row + 1, col + 1)))
+                        self.conductivity[row, col] = THERMOSTAT_CONDUCTIVITY
+                    elif line[row] == 'A': # AC
+                        self.ac_count += 1
+                        self.acs = np.append(self.acs, AC((row + 1, col + 1)))
+                        self.conductivity[row, col] = AC_CONDUCTIVITY
+                    elif line[row] == 'D': # door
+                        self.conductivity[row, col] = DOOR_CONDUCTIVITY
+                    elif line[row] == 'I': # inner wall
+                        self.conductivity[row, col] = INNER_WALL_CONDUCTIVITY
+                    elif line[row] == '_': # empty space
+                        self.conductivity[row, col] = EMPTY_SPACE_CONDUCTIVITY
+            
+                col += 1
+            f.close()
