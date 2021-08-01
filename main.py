@@ -9,13 +9,14 @@ from agent.agent import Agent
 
 from env.hvac_env import HvacEnv
 
-N_EPISODES = 200
+N_EPISODES = 5
 MAX_TIMESTEP = 1000
 
-episode_endpoints = np.array([], dtype='float32')
-rewards = np.array([], dtype='float32')
-times = np.array([], dtype='int32')
-target_temps = np.array([], dtype='float32')
+episode_endpoints = np.array([], dtype=np.float32)
+rewards = np.array([], dtype=np.float32)
+times = np.array([], dtype=np.int32)
+target_temps = np.array([], dtype=np.float32)
+difference_sums = np.array([], dtype=np.float32)
 
 def train(env_name, train=True):
     env = HvacEnv()
@@ -28,8 +29,6 @@ def train(env_name, train=True):
     possible_actions = env.action_space
 
     agent = Agent(possible_actions, states, env_name, train)
-
-    index = 0
         
     for episode in range(N_EPISODES):
         old_state = env.reset()
@@ -43,15 +42,14 @@ def train(env_name, train=True):
             # uncomment below to view env
             # env.render()
 
-            index += 1
-
             # log steps
             global times
-            times = np.append(times, [index])
+            times = np.append(times, [env.step_count])
 
             actions = agent.get_actions(old_state, train=train)
 
             new_state, reward, done, _ = env.step(actions)
+            env.set_target_temp()
 
             is_done = done
             
@@ -88,7 +86,9 @@ def train(env_name, train=True):
 
         print("episode: {}/{} | score: {} | e: {:.3f}".format(episode +
               1, N_EPISODES, total_reward, agent.epsilon))
-        
+    
+    print(env.scheduler.difference_sums)
+
     if train:
         agent.model.save_weights("weights/" + env_name + ".h5", overwrite=True)
 
@@ -121,7 +121,7 @@ if __name__ == "__main__":
         color = (r, g, b)
 
         plt.plot(times, sub_thermostat_temps, c=color, label='Themostat: {}'.format(i))
-    
+
     plt.plot(times, target_temps, c='b', label='Temperature Setpoint')
 
     plt.title('Reward & Thermostat')

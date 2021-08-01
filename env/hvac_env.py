@@ -1,6 +1,5 @@
 import os
 import math
-import random
 import numpy as np
 
 from gym import Env
@@ -11,6 +10,7 @@ from env.type_models.wall import Wall
 from env.type_models.thermostat import Thermostat
 
 from env.visual import Visual
+from env.schedule.scheduler import Scheduler
 from env.conductivity import OUTSIDE_TEMP, apply_conductivity
 
 APPLY_LENGTH = 400
@@ -28,7 +28,7 @@ DOOR_CONDUCTIVITY = 0.5
 INNER_WALL_CONDUCTIVITY = 0.3
 EMPTY_SPACE_CONDUCTIVITY = 1
 
-MAP_FILE_NAME = "map.txt";
+MAP_FILE_NAME = "map.txt"
 
 PASS_COLOR = '\033[94m'
 FAIL_COLOR = '\033[91m'
@@ -36,12 +36,14 @@ SOLVE_SUCCESS_COLOR = '\033[92m'
 RESET_COLOR = '\033[0m'
 
 class HvacEnv(Env):
-    def __init__(self):    
+    def __init__(self):
         self.walls = np.array([], dtype=object)
         self.thermostats = np.array([], dtype=object)
         self.acs = np.array([], dtype=object)
 
         self.process_map()
+
+        self.scheduler = Scheduler(states=len(self.thermostats))
 
         high = np.array([
             OUTSIDE_TEMP - 76 # max differece
@@ -59,9 +61,6 @@ class HvacEnv(Env):
         
         self.action_space = Tuple([Discrete(self.ac_count), Discrete(2)])
 
-        # set target temperature
-        self.set_target_temp()
-
         # set grid temps
         self.grid = np.full((self.max_width, self.max_height), START_TEMP)
         self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
@@ -69,15 +68,11 @@ class HvacEnv(Env):
         # set state
         self.state = np.array([], dtype=np.float32)
 
-        for i in range(len(self.thermostats)):
-            t: Thermostat = self.thermostats[i]
-            current_temp = self.grid[t.position[0]][t.position[1]]
+        # keep track of total steps
+        self.step_count = 0
 
-            self.state = np.append(self.state, [current_temp - self.target_temp])
-        
         # keep track of old changes
         self.old_deltas = np.full((1, len(self.thermostats)), -1, dtype=np.float32)
-        print(self.old_deltas)
 
         # time (prevent AI from creating a infinite loop)
         self.apply_length = APPLY_LENGTH
@@ -99,6 +94,7 @@ class HvacEnv(Env):
             else:
                 print(FAIL_COLOR + 'Failed.' + RESET_COLOR)
 
+        self.step_count += 1
         self.apply_length -= 1
 
         # process action
@@ -127,6 +123,8 @@ class HvacEnv(Env):
             current_temp = self.grid[t.position[0]][t.position[1]]
 
             self.state = np.append(self.state, [current_temp - self.target_temp])
+        
+        self.scheduler.save_differences(self.state)
 
         # calculate done 
         done = False
@@ -167,23 +165,28 @@ class HvacEnv(Env):
         self.show_gui = True
         self.gui.render()
 
-    def reset(self):
-        self.set_target_temp()
-        
+    def reset(self):      
         self.grid = np.full((self.max_width, self.max_height), START_TEMP)
         self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
 
         self.apply_length = APPLY_LENGTH
 
+        self.old_deltas = np.full((1, len(self.thermostats)), -1, dtype=np.float32)
+
         self.state = np.array([], dtype=np.float32)
 
-        self.old_deltas = np.full((1, len(self.thermostats)), -1, dtype=np.float32)
-        
+        self.set_target_temp()
+
         for i in range(len(self.thermostats)):
             t: Thermostat = self.thermostats[i]
             current_temp = self.grid[t.position[0]][t.position[1]]
 
-            self.state = np.append(self.state, [current_temp - self.target_temp])
+            self.state = np.append(
+                self.state, 
+                [current_temp - self.target_temp]
+            )
+        
+        self.scheduler.save_differences(self.state)
 
         return self.state
     
@@ -195,13 +198,10 @@ class HvacEnv(Env):
             temps[i] = self.grid[t.position[0], t.position[1]]
 
         return temps
-    
-    def set_target_temp(self):
-        self.target_temp = random.randint(LOW_TEMP_RANGE, HIGH_TEMP_RANGE)
 
-        while self.target_temp == START_TEMP:
-            self.target_temp = random.randint(LOW_TEMP_RANGE, HIGH_TEMP_RANGE)
-    
+    def set_target_temp(self):
+        self.target_temp = self.scheduler.get_target_temp(step_count=self.step_count)
+
     def process_map(self):
         self.ac_count = 0
 
@@ -242,3 +242,4 @@ class HvacEnv(Env):
             
                 col += 1
             f.close()
+                
