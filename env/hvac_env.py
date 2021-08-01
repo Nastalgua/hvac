@@ -11,7 +11,7 @@ from env.type_models.thermostat import Thermostat
 
 from env.visual import Visual
 from env.schedule.scheduler import Scheduler
-from env.conductivity import OUTSIDE_TEMP, apply_conductivity
+from env.conductivity import apply_conductivity
 
 APPLY_LENGTH = 400
 
@@ -46,7 +46,7 @@ class HvacEnv(Env):
         self.scheduler = Scheduler(states=len(self.thermostats))
 
         high = np.array([
-            OUTSIDE_TEMP - 76 # max differece
+            self.scheduler.max_outside_temp - 76 # max differece
         ], dtype=np.float32)
 
         low = np.array([
@@ -63,7 +63,7 @@ class HvacEnv(Env):
 
         # set grid temps
         self.grid = np.full((self.max_width, self.max_height), START_TEMP)
-        self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
+        self.grid = np.pad(self.grid, 1, constant_values=[self.scheduler.curr_outside_temp])
 
         # set state
         self.state = np.array([], dtype=np.float32)
@@ -108,7 +108,7 @@ class HvacEnv(Env):
                     self.grid[current_ac.position[0]][current_ac.position[1]] = AC_FIXED_TEMP
 
         # apply the temperature conductivity
-        self.grid = apply_conductivity(self.grid, self.conductivity)
+        self.grid = apply_conductivity(self.grid, self.conductivity, self.scheduler)
         
         # maintain AC temperature after applying conductivity
         for ac in self.acs:
@@ -167,7 +167,7 @@ class HvacEnv(Env):
 
     def reset(self):      
         self.grid = np.full((self.max_width, self.max_height), START_TEMP)
-        self.grid = np.pad(self.grid, 1, constant_values=[OUTSIDE_TEMP])
+        self.grid = np.pad(self.grid, 1, constant_values=[self.scheduler.curr_outside_temp])
 
         self.apply_length = APPLY_LENGTH
 
@@ -201,6 +201,9 @@ class HvacEnv(Env):
 
     def set_target_temp(self):
         self.target_temp = self.scheduler.get_target_temp(step_count=self.step_count)
+    
+    def set_outside_temp(self):
+        self.scheduler.set_curr_outside_temp(step_count=self.step_count)
 
     def process_map(self):
         self.ac_count = 0
