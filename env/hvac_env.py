@@ -13,7 +13,7 @@ from env.visual import Visual
 from env.schedule.scheduler import Scheduler
 from env.conductivity import apply_conductivity
 
-APPLY_LENGTH = 400
+APPLY_LENGTH = 540
 
 START_TEMP = 75
 AC_FIXED_TEMP = 55
@@ -25,7 +25,7 @@ WALL_CONDUCTIVITY = 0.01
 THERMOSTAT_CONDUCTIVITY = 1
 AC_CONDUCTIVITY = 1
 DOOR_CONDUCTIVITY = 0.5
-INNER_WALL_CONDUCTIVITY = 0.3
+INNER_WALL_CONDUCTIVITY = 0.4
 EMPTY_SPACE_CONDUCTIVITY = 1
 
 MAP_FILE_NAME = "map.txt"
@@ -42,6 +42,7 @@ class HvacEnv(Env):
         self.acs = np.array([], dtype=object)
 
         self.process_map()
+        print(len(self.thermostats))
 
         self.scheduler = Scheduler(states=len(self.thermostats))
 
@@ -83,16 +84,17 @@ class HvacEnv(Env):
 
     def step(self, actions):
         # determine if AI is on right course
-        if self.grid[self.thermostats[0].position[0]][self.thermostats[0].position[1]] < self.target_temp:
-            if actions[0, 0] == 1:
-                print(PASS_COLOR + 'Passed!' + RESET_COLOR)
+        for i in range(len(self.thermostats)):
+            if self.grid[self.thermostats[i].position[0]][self.thermostats[i].position[1]] < self.target_temp:
+                if actions[0, 0] == 1:
+                    print(PASS_COLOR + str(i) + ' Passed!' + RESET_COLOR)
+                else:
+                    print(FAIL_COLOR + str(i) + ' Failed.' + RESET_COLOR)
             else:
-                print(FAIL_COLOR + 'Failed.' + RESET_COLOR)
-        else:
-            if actions[0, 1] == 1:
-                print(PASS_COLOR + 'Passed!' + RESET_COLOR)
-            else:
-                print(FAIL_COLOR + 'Failed.' + RESET_COLOR)
+                if actions[0, 1] == 1:
+                    print(PASS_COLOR + str(i) + ' Passed!' + RESET_COLOR)
+                else:
+                    print(FAIL_COLOR + str(i) + ' Failed.' + RESET_COLOR)
 
         self.step_count += 1
         self.apply_length -= 1
@@ -101,6 +103,14 @@ class HvacEnv(Env):
         if len(self.acs) > 0:
             for i in range(len(actions)): # len(actions) == len(acs)
                 current_ac: AC = self.acs[i]
+
+                # Dumb controller
+                # t: Thermostat = self.thermostats[0]
+                # current_pos_temp = self.grid[t.position[0]][t.position[1]]
+                # if current_pos_temp > self.target_temp:
+                #     current_ac.on = True
+                # else:
+                #     current_ac.on = False
 
                 current_ac.on = (actions[i, 1] == 1)
                 
@@ -166,8 +176,8 @@ class HvacEnv(Env):
         self.gui.render()
 
     def reset(self):      
-        self.grid = np.full((self.max_width, self.max_height), START_TEMP)
-        self.grid = np.pad(self.grid, 1, constant_values=[self.scheduler.curr_outside_temp])
+        # self.grid = np.full((self.max_width, self.max_height), START_TEMP)
+        # self.grid = np.pad(self.grid, 1, constant_values=[self.scheduler.curr_outside_temp])
 
         self.apply_length = APPLY_LENGTH
 

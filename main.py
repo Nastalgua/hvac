@@ -9,7 +9,7 @@ from agent.agent import Agent
 
 from env.hvac_env import HvacEnv
 
-N_EPISODES = 200
+N_EPISODES = 1000
 MAX_TIMESTEP = 1000
 
 episode_endpoints = np.array([], dtype=np.float32)
@@ -40,7 +40,7 @@ def train(env_name, train=True):
     
         while not is_done:
             # uncomment below to view env
-            env.render()
+            # env.render()
 
             # log steps
             global times
@@ -88,7 +88,7 @@ def train(env_name, train=True):
         print("episode: {}/{} | score: {} | e: {:.3f}".format(episode +
               1, N_EPISODES, total_reward, agent.epsilon))
     
-    print('Difference Sums: {}'.format(env.scheduler.difference_sums))
+    print('Difference Sums:\n{}'.format(env.scheduler.difference_sums))
 
     if train:
         agent.model.save_weights("weights/" + env_name + ".h5", overwrite=True)

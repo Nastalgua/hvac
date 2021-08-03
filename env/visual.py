@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+from numpy.lib.shape_base import tile
 import pygame
 from pygame import surface
 from pygame import color
@@ -14,6 +15,14 @@ TILE_COLOR_TWO = (235, 235, 235)
 AC_COLOR = (93, 216, 228)
 TARGET_COLOR = (91, 128, 207)
 WALL_COLOR = (66, 66, 66)
+
+SCALE_7_COLOR = (123, 0, 0)
+SCALE_6_COLOR = (222, 0, 0)
+SCALE_5_COLOR = (220, 70, 70)
+SCALE_4_COLOR = (233, 93, 93)
+SCALE_3_COLOR = (231, 136, 136)
+SCALE_2_COLOR = (237, 217, 110)
+SCALE_1_COLOR = (219, 226, 175)
 
 TEMP_NUM_COLOR = (0, 0, 0)
 
@@ -51,8 +60,19 @@ class Visual:
     def draw_tile(self, position, value, surface):
         value = int(round(value, 0))
         rect = pygame.Rect((position[0] - (GRID_SIZE / 2), position[1] - (GRID_SIZE / 2)), (GRID_SIZE, GRID_SIZE))
+        
+        if value > 90:
+            tile_color = SCALE_7_COLOR
+        elif value <= 90 and value > 80:
+            tile_color = SCALE_6_COLOR
+        elif value <= 80 and value > 70:
+            tile_color = SCALE_5_COLOR
+        elif value <= 70 and value > 60:
+            tile_color = SCALE_4_COLOR
+        else: 
+            tile_color = SCALE_3_COLOR
 
-        pygame.draw.rect(surface, (212, min(max(222 - value, 0), 255), min(max(222 - value, 0), 255)), rect)
+        pygame.draw.rect(surface, tile_color, rect)
 
         temp = FONT.render(str(value), 1, TEMP_NUM_COLOR)
         text_rect = temp.get_rect(center=(position[0], position[1]))

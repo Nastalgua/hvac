@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-SET_TARGET_TEMP_MAX_STEP_COUNT = 200
+SET_TARGET_TEMP_MAX_STEP_COUNT = 60
 SET_OUTSIDE_TEMP_MAX_STEP_COUNT = 120
 
 TARGET_TEMPS_FILE_NAME = "target_temps.txt"
@@ -30,9 +30,8 @@ class Scheduler:
 
         if step_count != 0 and step_count % SET_TARGET_TEMP_MAX_STEP_COUNT == 0:
             self.target_temp_index += 1
-            target_temp = self.target_temps[self.target_temp_index]
 
-            print('get next target temp')
+            target_temp = self.target_temps[self.target_temp_index]
 
             # calc the sum
             temp_sums = np.array([], dtype=np.float32)
@@ -43,12 +42,18 @@ class Scheduler:
             reshaped_temp_sums = np.reshape(temp_sums, (1, self.states))
             self.difference_sums = np.append(self.difference_sums, reshaped_temp_sums, axis=0)
 
+            if self.target_temp_index == len(self.target_temps) - 1:
+                self.target_temp_index = 0;
+
         return target_temp
     
     def set_curr_outside_temp(self, step_count):
         if step_count != 0 and step_count % SET_OUTSIDE_TEMP_MAX_STEP_COUNT == 0:
             self.outside_temp_index += 1
             self.curr_outside_temp = self.outside_temps[self.outside_temp_index]
+
+            if self.outside_temp_index == len(self.outside_temps) - 1:
+                self.outside_temp_index = 0;
 
     def get_history_column(self, index):
         return self.difference_history[:, index][1:]
