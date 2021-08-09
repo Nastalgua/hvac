@@ -9,7 +9,7 @@ from agent.agent import Agent
 
 from env.hvac_env import HvacEnv
 
-N_EPISODES = 1000
+N_EPISODES = 200
 MAX_TIMESTEP = 1000
 
 episode_endpoints = np.array([], dtype=np.float32)
@@ -18,8 +18,8 @@ times = np.array([], dtype=np.int32)
 target_temps = np.array([], dtype=np.float32)
 difference_sums = np.array([], dtype=np.float32)
 
-def train(env_name, train=True):
-    env = HvacEnv()
+def train(env_name, train=True, use_dumb=False, print_step_results=False):
+    env = HvacEnv(use_dumb=use_dumb, print_step_results=print_step_results)
 
     global thermostat_temps
     thermostat_temps = np.empty((1, len(env.thermostats)), dtype='float32')
@@ -49,6 +49,10 @@ def train(env_name, train=True):
             actions = agent.get_actions(old_state, train=train)
 
             new_state, reward, done, _ = env.step(actions)
+
+            if episode == (N_EPISODES / 2):
+                env.scheduler.reset_scores()
+
             env.set_target_temp()
             env.set_outside_temp()
 
@@ -56,7 +60,6 @@ def train(env_name, train=True):
             
             if train:
                 agent.remember(old_state, actions, reward, new_state, done)
-                # agent.train_short_memory(old_state, actions, reward, new_state, done)
 
             # log thermostat temps
             env_thermostat_temps = env.get_thermostat_temps()
@@ -88,7 +91,11 @@ def train(env_name, train=True):
         print("episode: {}/{} | score: {} | e: {:.3f}".format(episode +
               1, N_EPISODES, total_reward, agent.epsilon))
     
+    global difference_sums
+    difference_sums = env.scheduler.difference_sums
+
     print('Difference Sums:\n{}'.format(env.scheduler.difference_sums))
+    print('Total Difference Sums Score:\n{}'.format(env.scheduler.scores))
 
     if train:
         agent.model.save_weights("weights/" + env_name + ".h5", overwrite=True)
@@ -104,11 +111,15 @@ def to_csv():
     for i in range(len(thermostat_temps[0])):
         sub_thermostat_temps = thermostat_temps[:, i][1:]
         writer.writerow(sub_thermostat_temps)
+
+    for i in range(len(difference_sums[0])):
+        sub_difference_sum = difference_sums[:, i][1:]
+        writer.writerow(sub_difference_sum)
     
     f.close()
 
 if __name__ == "__main__":
-    train('hvac', train=True)
+    train('hvac', train=False, use_dumb=False, print_step_results=False)
     
     # graph
     plt.plot(times, rewards, 'r', label='Reward')
@@ -122,6 +133,16 @@ if __name__ == "__main__":
         color = (r, g, b)
 
         plt.plot(times, sub_thermostat_temps, c=color, label='Themostat: {}'.format(i))
+    
+    for i in range(len(difference_sums[0])):
+        sub_difference_sum = thermostat_temps[:, i][1:]
+
+        r = random.random()
+        b = random.random()
+        g = random.random()
+        color = (r, g, b)
+
+        plt.plot(times, sub_difference_sum, c=color, label='Difference Sum: {}'.format(i))
 
     plt.plot(times, target_temps, c='b', label='Temperature Setpoint')
 

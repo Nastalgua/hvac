@@ -24,6 +24,8 @@ class Scheduler:
 
         self.curr_outside_temp = self.outside_temps[self.outside_temp_index]
         self.max_outside_temp = np.amax(self.curr_outside_temp)
+
+        self.scores = np.zeros((1, self.states), dtype=np.float32)
     
     def get_target_temp(self, step_count):
         target_temp = self.target_temps[self.target_temp_index]
@@ -37,6 +39,10 @@ class Scheduler:
             temp_sums = np.array([], dtype=np.float32)
             for i in range(len(self.difference_history[0])):
                 difference_history_column = self.get_history_column(i)
+
+                for j in range(len(difference_history_column)):
+                    difference_history_column[j] = abs(difference_history_column[j])
+
                 temp_sums = np.append(temp_sums, [self.sum(difference_history_column)])
 
             reshaped_temp_sums = np.reshape(temp_sums, (1, self.states))
@@ -63,10 +69,17 @@ class Scheduler:
 
     def save_differences(self, differences):
         reshaped_differences = np.reshape(differences, (1, self.states))
+        
         self.difference_history = np.append(self.difference_history, reshaped_differences, axis=0)
+
+        for i in range(len(self.scores[0])):
+            self.scores[0][i] += abs(reshaped_differences[0][i])
 
     def reset_differences(self):
         self.difference_history = np.zeros((1, self.states), dtype=np.float32)
+
+    def reset_scores(self):
+        self.scores = np.zeros((1, self.states), dtype=np.float32)
 
     def sum(self, differences):
         return np.sum(differences)

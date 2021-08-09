@@ -36,13 +36,15 @@ SOLVE_SUCCESS_COLOR = '\033[92m'
 RESET_COLOR = '\033[0m'
 
 class HvacEnv(Env):
-    def __init__(self):
+    def __init__(self, use_dumb, print_step_results):
+        self.use_dumb = use_dumb
+        self.print_step_results = print_step_results
+
         self.walls = np.array([], dtype=object)
         self.thermostats = np.array([], dtype=object)
         self.acs = np.array([], dtype=object)
 
         self.process_map()
-        print(len(self.thermostats))
 
         self.scheduler = Scheduler(states=len(self.thermostats))
 
@@ -84,17 +86,18 @@ class HvacEnv(Env):
 
     def step(self, actions):
         # determine if AI is on right course
-        for i in range(len(self.thermostats)):
-            if self.grid[self.thermostats[i].position[0]][self.thermostats[i].position[1]] < self.target_temp:
-                if actions[0, 0] == 1:
-                    print(PASS_COLOR + str(i) + ' Passed!' + RESET_COLOR)
+        if self.print_step_results:
+            for i in range(len(self.thermostats)):
+                if self.grid[self.thermostats[i].position[0]][self.thermostats[i].position[1]] < self.target_temp:
+                    if actions[0, 0] == 1:
+                        print(PASS_COLOR + str(i) + ' Passed!' + RESET_COLOR)
+                    else:
+                        print(FAIL_COLOR + str(i) + ' Failed.' + RESET_COLOR)
                 else:
-                    print(FAIL_COLOR + str(i) + ' Failed.' + RESET_COLOR)
-            else:
-                if actions[0, 1] == 1:
-                    print(PASS_COLOR + str(i) + ' Passed!' + RESET_COLOR)
-                else:
-                    print(FAIL_COLOR + str(i) + ' Failed.' + RESET_COLOR)
+                    if actions[0, 1] == 1:
+                        print(PASS_COLOR + str(i) + ' Passed!' + RESET_COLOR)
+                    else:
+                        print(FAIL_COLOR + str(i) + ' Failed.' + RESET_COLOR)
 
         self.step_count += 1
         self.apply_length -= 1
@@ -104,15 +107,15 @@ class HvacEnv(Env):
             for i in range(len(actions)): # len(actions) == len(acs)
                 current_ac: AC = self.acs[i]
 
-                # Dumb controller
-                # t: Thermostat = self.thermostats[0]
-                # current_pos_temp = self.grid[t.position[0]][t.position[1]]
-                # if current_pos_temp > self.target_temp:
-                #     current_ac.on = True
-                # else:
-                #     current_ac.on = False
-
-                current_ac.on = (actions[i, 1] == 1)
+                if self.use_dumb:
+                    t: Thermostat = self.thermostats[0]
+                    current_pos_temp = self.grid[t.position[0]][t.position[1]]
+                    if current_pos_temp > self.target_temp:
+                        current_ac.on = True
+                    else:
+                        current_ac.on = False
+                else:
+                    current_ac.on = (actions[i, 1] == 1)
                 
                 if current_ac.on:
                     self.grid[current_ac.position[0]][current_ac.position[1]] = AC_FIXED_TEMP
@@ -134,6 +137,7 @@ class HvacEnv(Env):
 
             self.state = np.append(self.state, [current_temp - self.target_temp])
         
+        
         self.scheduler.save_differences(self.state)
 
         # calculate done 
@@ -150,9 +154,10 @@ class HvacEnv(Env):
             delta = abs(current_pos_temp - self.target_temp)
 
             if delta < 0.5:
-                print(SOLVE_SUCCESS_COLOR + 'Success!' + RESET_COLOR)
+                if self.print_step_results:
+                    print(SOLVE_SUCCESS_COLOR + '{} Success!'.format(i) + RESET_COLOR)
+                
                 reward += 50
-                done = True
             
             if self.old_deltas[0][i] != -1:
                 if self.old_deltas[0][i] > delta: # moving away from the target number
