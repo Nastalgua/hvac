@@ -73,6 +73,7 @@ class HvacEnv(Env):
 
         # keep track of total steps
         self.step_count = 0
+        self.success_count = 0
 
         # keep track of old changes
         self.old_deltas = np.full((1, len(self.thermostats)), -1, dtype=np.float32)
@@ -154,21 +155,23 @@ class HvacEnv(Env):
             delta = abs(current_pos_temp - self.target_temp)
 
             if delta < 0.5:
+                self.success_count += 1
                 if self.print_step_results:
                     print(SOLVE_SUCCESS_COLOR + '{} Success!'.format(i) + RESET_COLOR)
                 
-                reward += 50
+                reward += 100
+            else:
+                capped_delta = min(delta, math.sqrt(100))
+                reward += (100 - (capped_delta ** 2))
             
             if self.old_deltas[0][i] != -1:
                 if self.old_deltas[0][i] > delta: # moving away from the target number
-                    reward -= 2
+                    reward -= 15
+                    reward = max(reward, 0)
                 else:
-                    reward += 2
+                    reward += 5
 
             self.old_deltas[0][i] = delta
-        
-        # discourage AI from taking too long
-        reward -= (APPLY_LENGTH - self.apply_length)
 
         info = {}
 

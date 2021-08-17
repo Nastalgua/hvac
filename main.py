@@ -9,7 +9,7 @@ from agent.agent import Agent
 
 from env.hvac_env import HvacEnv
 
-N_EPISODES = 200
+N_EPISODES = 250
 MAX_TIMESTEP = 1000
 
 episode_endpoints = np.array([], dtype=np.float32)
@@ -18,7 +18,10 @@ times = np.array([], dtype=np.int32)
 target_temps = np.array([], dtype=np.float32)
 difference_sums = np.array([], dtype=np.float32)
 
-def train(env_name, train=True, use_dumb=False, print_step_results=False):
+target_fs = np.array([], dtype=np.float32)
+x_s = np.array([], dtype=np.float32)
+
+def train(env_name, train=False, use_dumb=False, print_step_results=False, graph_target_fs=False):
     env = HvacEnv(use_dumb=use_dumb, print_step_results=print_step_results)
 
     global thermostat_temps
@@ -87,6 +90,9 @@ def train(env_name, train=True, use_dumb=False, print_step_results=False):
         if train:
             agent.train_long_memory()
             agent.decrease_epsilon()
+        
+        if graph_target_fs:
+            agent.trainer.update_target_fs()
 
         print("episode: {}/{} | score: {} | e: {:.3f}".format(episode +
               1, N_EPISODES, total_reward, agent.epsilon))
@@ -94,8 +100,15 @@ def train(env_name, train=True, use_dumb=False, print_step_results=False):
     global difference_sums
     difference_sums = env.scheduler.difference_sums
 
+    global target_fs
+    target_fs = agent.trainer.target_fs
+
+    global x_s
+    x_s = agent.trainer.x_s
+
     print('Difference Sums:\n{}'.format(env.scheduler.difference_sums))
     print('Total Difference Sums Score:\n{}'.format(env.scheduler.scores))
+    print(env.success_count)
 
     if train:
         agent.model.save_weights("weights/" + env_name + ".h5", overwrite=True)
@@ -119,37 +132,51 @@ def to_csv():
     f.close()
 
 if __name__ == "__main__":
-    train('hvac', train=False, use_dumb=False, print_step_results=False)
-    
-    # graph
-    plt.plot(times, rewards, 'r', label='Reward')
-    
-    for i in range(len(thermostat_temps[0])):
-        sub_thermostat_temps = thermostat_temps[:, i][1:]
+    graph_target_fs = False
+    train('hvac', train=False, use_dumb=False, print_step_results=True, graph_target_fs=graph_target_fs)
 
-        r = random.random()
-        b = random.random()
-        g = random.random()
-        color = (r, g, b)
+    if not graph_target_fs:
+        # graph
+        # plt.plot(times, rewards, 'r', label='Reward')
 
-        plt.plot(times, sub_thermostat_temps, c=color, label='Themostat: {}'.format(i))
-    
-    for i in range(len(difference_sums[0])):
-        sub_difference_sum = thermostat_temps[:, i][1:]
+        for i in range(len(thermostat_temps[0])):
+            sub_thermostat_temps = thermostat_temps[:, i][1:]
 
-        r = random.random()
-        b = random.random()
-        g = random.random()
-        color = (r, g, b)
+            r = random.random()
+            b = random.random()
+            g = random.random()
+            color = (r, g, b)
 
-        plt.plot(times, sub_difference_sum, c=color, label='Difference Sum: {}'.format(i))
+            plt.plot(times, sub_thermostat_temps, c=color, label='Themostat: {}'.format(i))
+        
+        for i in range(len(difference_sums[0])):
+            sub_difference_sum = thermostat_temps[:, i][1:]
 
-    plt.plot(times, target_temps, c='b', label='Temperature Setpoint')
+            r = random.random()
+            b = random.random()
+            g = random.random()
+            color = (r, g, b)
 
-    plt.title('Reward & Thermostat')
-    
-    for endpoint in episode_endpoints:
-        plt.axvline(x=endpoint)
+            plt.plot(times, sub_difference_sum, c=color, label='Difference Sum: {}'.format(i))
+
+        plt.plot(times, target_temps, c='b', label='Temperature Setpoint')
+
+        plt.title('Reward & Thermostat')
+
+        # for endpoint in episode_endpoints:
+        #     plt.axvline(x=endpoint)
+    else:
+        for i in range(len(target_fs[0])):
+            sub_target_fs = target_fs[:, i][1:]
+            
+            r = random.random()
+            b = random.random()
+            g = random.random()
+            color = (r, g, b)
+
+            plt.plot(x_s, sub_target_fs, c=color, label='Target_F: {}'.format(i))
+        
+        plt.title('Target_fs')
 
     plt.legend()
 

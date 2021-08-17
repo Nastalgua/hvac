@@ -1,4 +1,3 @@
-import sys
 import numpy as np
 
 from tensorflow.keras.models import Sequential
@@ -26,12 +25,15 @@ class QTrainer:
         self.gamma = gamma
         self.model = model
 
+        self.target_fs = np.empty((1, 2), dtype='float32')
+        self.x_s = np.array([], dtype=np.float32)
+
     def train_step(self, state, actions, reward, next_state, done):
         target = reward
         
         if not done:
             target = reward + self.gamma * np.max(self.model.predict(next_state)[0])
-        
+
         target_f = self.model.predict(state)
 
         for action in range(len(actions[0])):
@@ -39,3 +41,13 @@ class QTrainer:
                 target_f[0][action] = target
         
         self.model.fit(state, target_f, verbose=0)
+    
+    def update_target_fs(self):
+        rang = np.arange(-20.0, 20.1, 0.1)
+        
+        for i in rang:
+            self.x_s = np.append(self.x_s, [i])
+            prediction = self.model.predict([i])
+            self.target_fs = np.append(self.target_fs, prediction, axis=0)
+            
+    
